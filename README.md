@@ -1,6 +1,6 @@
 # pi-state-sync
 
-[![npm](https://img.shields.io/npm/v/pi-state-sync?color=22d3ee)](https://www.npmjs.com/package/pi-state-sync)
+[![npm](https://img.shields.io/npm/v/%40moejay%2Fpi-state-sync?color=22d3ee)](https://www.npmjs.com/package/@moejay/pi-state-sync)
 [![CI](https://github.com/moejay/pi-state-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/moejay/pi-state-sync/actions/workflows/ci.yml)
 [![website](https://img.shields.io/badge/website-live-a78bfa)](https://moejay.github.io/pi-state-sync/)
 
@@ -27,7 +27,7 @@ Git-backed configuration sync for [Pi](https://pi.dev), with dotenvx validation 
 From npm:
 
 ```bash
-pi install npm:pi-state-sync
+pi install npm:@moejay/pi-state-sync
 ```
 
 From GitHub:
@@ -63,7 +63,7 @@ git clone git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git ~/.pi/agent
 pi
 ```
 
-The committed `settings.json` contains the `pi-state-sync` package declaration, so Pi can restore the package. Authenticate separately on each host with `/login`.
+The committed `settings.json` contains the `@moejay/pi-state-sync` package declaration, so Pi can restore the package. Authenticate separately on each host with `/login`.
 
 If you use a custom config location, set `PI_CODING_AGENT_DIR` before starting Pi. `PI_STATE_DIR` can explicitly select the same Git-backed state root.
 

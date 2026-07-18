@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Publish under the `@moejay/pi-state-sync` npm scope.
+
 ## 0.1.0
 
 - Add `/pistate status`, `snapshot`, `pull`, and `push` commands.
