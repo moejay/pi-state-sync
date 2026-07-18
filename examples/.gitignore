@@ -1,0 +1,12 @@
+# Host-local credentials and trust
+.env.keys
+auth.json
+trust.json
+
+# Pi runtime/cache data
+models-store.json
+sessions/
+npm/
+git/
+bin/
+node_modules/

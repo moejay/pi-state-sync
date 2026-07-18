@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://moejay.github.io/pi-state-sync/sitemap.xml

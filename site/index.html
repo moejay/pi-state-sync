@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b14">
+  <meta name="description" content="Git-backed configuration sync for Pi, with dotenvx-encrypted secrets and explicit commands.">
+  <meta property="og:title" content="pi-state-sync">
+  <meta property="og:description" content="Your Pi configuration, safely synchronized across hosts.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://moejay.github.io/pi-state-sync/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/moejay/pi-state-sync/main/docs/pi-state-sync.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>pi-state-sync — Git-backed Pi configuration</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="page-glow page-glow-one" aria-hidden="true"></div>
+  <div class="page-glow page-glow-two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="pi-state-sync home">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+      <span>pi-state-sync</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#features">Features</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#security">Security</a>
+      <a class="nav-github" href="https://github.com/moejay/pi-state-sync">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <div class="eyebrow"><span></span> Pi extension · v0.1.0</div>
+        <h1>Your Pi config.<br><em>Everywhere.</em></h1>
+        <p class="hero-lead">Git-backed configuration sync across hosts, with encrypted secrets, deliberate commands, and zero session leakage.</p>
+        <div class="hero-actions">
+          <button class="install-command copy-button" data-copy="pi install npm:pi-state-sync">
+            <code>pi install npm:pi-state-sync</code>
+            <span class="copy-label">Copy</span>
+          </button>
+          <a class="secondary-button" href="https://github.com/moejay/pi-state-sync#quick-start">Quick start <span aria-hidden="true">→</span></a>
+        </div>
+        <ul class="hero-proof" aria-label="Key properties">
+          <li><span class="check">✓</span> Explicit Git writes</li>
+          <li><span class="check">✓</span> dotenvx validation</li>
+          <li><span class="check">✓</span> No session sync</li>
+        </ul>
+      </div>
+
+      <div class="hero-visual" aria-label="Pi state synchronization command preview">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="state-card">
+          <div class="state-card-head">
+            <div class="window-dots"><i></i><i></i><i></i></div>
+            <span>pi · ~/.pi/agent</span>
+          </div>
+          <div class="terminal-line"><span class="prompt">›</span><span>/pistate status</span></div>
+          <div class="terminal-output"><b>M</b> settings.json<br><b>M</b> extensions/review.ts</div>
+          <div class="terminal-line active"><span class="prompt">›</span><span>/pistate snapshot chore: sync config</span></div>
+          <div class="pipeline">
+            <span class="done">validate</span><i></i><span class="done">stage</span><i></i><span class="done">commit</span>
+          </div>
+          <div class="terminal-success"><span>✓</span> Committed: chore: sync config</div>
+        </div>
+        <div class="host host-left"><span class="host-dot"></span> workstation</div>
+        <div class="host host-right"><span class="host-dot"></span> laptop</div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="Technologies">
+      <span>Built for</span>
+      <strong>Pi</strong>
+      <i></i>
+      <strong>Git</strong>
+      <i></i>
+      <strong>dotenvx</strong>
+      <i></i>
+      <strong>GitHub</strong>
+    </section>
+
+    <section class="section shell" id="features">
+      <div class="section-heading">
+        <div class="eyebrow"><span></span> Small surface, strong defaults</div>
+        <h2>Sync what matters.<br>Leave risk behind.</h2>
+        <p>Pi already stores durable configuration as files. pi-state-sync adds guardrails—not another storage format.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card feature-wide">
+          <div class="feature-icon cyan" aria-hidden="true">⌘</div>
+          <div>
+            <h3>Four commands. No hidden automation.</h3>
+            <p>Status, snapshot, pull, push. No background commits, shutdown hooks, force pushes, or surprise network writes.</p>
+          </div>
+          <div class="mini-commands">
+            <code>/pistate status</code>
+            <code>/pistate snapshot</code>
+            <code>/pistate pull</code>
+            <code>/pistate push</code>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon purple" aria-hidden="true">◇</div>
+          <h3>Portable allowlist</h3>
+          <p>Settings, models, context, extensions, skills, prompts, and themes. Nothing else gets staged.</p>
+          <div class="file-stack" aria-hidden="true">
+            <span>settings.json</span><span>models.json</span><span>extensions/</span>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon green" aria-hidden="true">⌁</div>
+          <h3>Secrets stay secrets</h3>
+          <p>Encrypted <code>.env</code> can travel. Private keys, OAuth auth, trust, sessions, and caches cannot.</p>
+          <div class="secret-row"><span class="lock">●</span><code>API_KEY="encrypted:…"</code></div>
+        </article>
+
+        <article class="feature-card feature-wide pull-card">
+          <div class="feature-icon amber" aria-hidden="true">⇣</div>
+          <div>
+            <h3>Predictable pulls</h3>
+            <p>Dirty trees stop. Pulls fast-forward or fail. Successful updates validate first, then reload Pi resources.</p>
+          </div>
+          <div class="flow-line" aria-label="Pull workflow">
+            <span>clean?</span><i></i><span>ff-only</span><i></i><span>validate</span><i></i><span>reload</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section workflow-section" id="workflow">
+      <div class="shell workflow-layout">
+        <div class="section-heading compact">
+          <div class="eyebrow"><span></span> Across hosts</div>
+          <h2>A workflow you already know.</h2>
+          <p>Git remains the source of truth. The extension makes safe operations convenient inside Pi.</p>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <span class="step-number">01</span>
+            <div><h3>Change Pi naturally</h3><p>Edit settings, add a skill, tune a theme, or install a package.</p></div>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <div><h3>Snapshot explicitly</h3><p>Review status, validate secrets, and create a local Git commit.</p></div>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <div><h3>Push, then pull elsewhere</h3><p>Move configuration—not credentials or conversation history.</p></div>
+          </li>
+        </ol>
+
+        <div class="workflow-terminal">
+          <div class="workflow-terminal-head"><span>Host A</span><span>Host B</span></div>
+          <pre><span class="muted"># workstation</span>
+<span class="accent">/pistate snapshot</span> "update tools"
+<span class="accent">/pistate push</span>
+
+<span class="muted"># laptop</span>
+<span class="purple-text">/pistate pull</span>
+<span class="success">✓ Pulled Pi state</span></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell secrets-section" id="security">
+      <div class="secret-visual" aria-hidden="true">
+        <div class="key-ring ring-one"></div>
+        <div class="key-ring ring-two"></div>
+        <div class="lock-card">
+          <div class="lock-symbol">⌾</div>
+          <strong>.env</strong>
+          <span>encrypted values</span>
+        </div>
+        <div class="blocked-file file-one">auth.json <b>local</b></div>
+        <div class="blocked-file file-two">sessions/ <b>local</b></div>
+        <div class="blocked-file file-three">.env.keys <b>local</b></div>
+      </div>
+      <div class="section-heading compact">
+        <div class="eyebrow"><span></span> Fail closed</div>
+        <h2>Designed around what must never sync.</h2>
+        <p>Credential and runtime paths are rejected if tracked. Likely literal JSON secrets fail validation. dotenvx checks environment files before commit.</p>
+        <a class="text-link" href="https://github.com/moejay/pi-state-sync/blob/main/docs/security.md">Read the security model <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="cta shell">
+      <div>
+        <div class="eyebrow"><span></span> Ready when you are</div>
+        <h2>Give your Pi a home.</h2>
+        <p>One private Git repository. Four explicit commands. Every host configured the same way.</p>
+      </div>
+      <button class="install-command copy-button large" data-copy="pi install npm:pi-state-sync">
+        <code>pi install npm:pi-state-sync</code>
+        <span class="copy-label">Copy</span>
+      </button>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand footer-brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>pi-state-sync</span></div>
+    <p>MIT licensed · Built by <a href="https://github.com/moejay">M0eJay</a> for the Pi community.</p>
+    <div><a href="https://www.npmjs.com/package/pi-state-sync">npm</a><a href="https://pi.dev/packages/pi-state-sync">pi.dev</a><a href="https://github.com/moejay/pi-state-sync">GitHub</a></div>
+  </footer>
+
+  <div class="toast" role="status" aria-live="polite">Copied to clipboard</div>
+</body>
+</html>

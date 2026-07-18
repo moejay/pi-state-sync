@@ -1,0 +1,74 @@
+{
+  "name": "pi-state-sync",
+  "version": "0.1.0",
+  "description": "Git-backed Pi configuration sync with dotenvx-encrypted secrets",
+  "license": "MIT",
+  "author": "M0eJay <moe@moejay.dev>",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "pi-extension",
+    "configuration",
+    "dotfiles",
+    "git",
+    "sync",
+    "dotenvx",
+    "secrets"
+  ],
+  "homepage": "https://moejay.github.io/pi-state-sync/",
+  "bugs": {
+    "url": "https://github.com/moejay/pi-state-sync/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moejay/pi-state-sync.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "extensions/pi-state/",
+    "examples/",
+    "docs/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/pi-state/index.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/moejay/pi-state-sync/main/docs/pi-state-sync.png"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run test && npm run typecheck",
+    "prepack": "npm run check"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.51.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@mariozechner/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR="${PI_STATE_DIR:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}}"
+export PI_STATE_DIR="$STATE_DIR"
+export PI_CODING_AGENT_DIR="$STATE_DIR"
+
+exec dotenvx run --strict --env-file "$STATE_DIR/.env" -- pi "$@"

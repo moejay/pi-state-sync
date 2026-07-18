@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-opacity="0.35"/></filter>
+  </defs>
+  <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
+  <circle cx="1050" cy="95" r="190" fill="#22d3ee" opacity="0.08"/>
+  <circle cx="110" cy="590" r="240" fill="#a78bfa" opacity="0.09"/>
+
+  <g transform="translate(90 92)" filter="url(#shadow)">
+    <rect width="208" height="208" rx="45" fill="#0f172a" stroke="#475569" stroke-width="3"/>
+    <path d="M56 63h46v82H72M102 84h47l20 20-20 20h-47" fill="none" stroke="#67e8f9" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="55" cy="63" r="12" fill="#22d3ee"/>
+    <circle cx="72" cy="145" r="12" fill="#a78bfa"/>
+    <circle cx="169" cy="104" r="12" fill="#f8fafc"/>
+  </g>
+
+  <text x="350" y="170" font-family="DejaVu Sans, sans-serif" font-size="76" font-weight="700" fill="#f8fafc">pi-state-sync</text>
+  <text x="354" y="230" font-family="DejaVu Sans, sans-serif" font-size="28" fill="#cbd5e1">Git-backed Pi configuration across hosts</text>
+
+  <g transform="translate(350 282)" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="600">
+    <rect x="0" y="0" width="145" height="52" rx="26" fill="#164e63" stroke="#22d3ee"/>
+    <text x="31" y="34" fill="#a5f3fc">Explicit</text>
+    <rect x="165" y="0" width="180" height="52" rx="26" fill="#3b1764" stroke="#a78bfa"/>
+    <text x="194" y="34" fill="#ddd6fe">Encrypted</text>
+    <rect x="365" y="0" width="145" height="52" rx="26" fill="#14532d" stroke="#4ade80"/>
+    <text x="397" y="34" fill="#bbf7d0">Portable</text>
+  </g>
+
+  <g transform="translate(90 430)" font-family="DejaVu Sans Mono, monospace" font-size="27">
+    <rect width="1020" height="112" rx="22" fill="#020617" stroke="#334155" stroke-width="2"/>
+    <text x="30" y="45" fill="#67e8f9">/pistate snapshot</text>
+    <text x="352" y="45" fill="#94a3b8">→ validate → commit</text>
+    <text x="30" y="84" fill="#c4b5fd">/pistate pull</text>
+    <text x="352" y="84" fill="#94a3b8">→ fast-forward → reload</text>
+  </g>
+  <text x="90" y="596" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#e2e8f0">Pi extension • Git • dotenvx • no session sync</text>
+</svg>

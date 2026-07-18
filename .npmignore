@@ -1,0 +1,22 @@
+# Personal Pi state and development-only files
+.env
+.env.keys
+auth.json
+trust.json
+settings.json
+models.json
+keybindings.json
+AGENTS.md
+SYSTEM.md
+APPEND_SYSTEM.md
+sessions/
+npm/
+git/
+bin/
+node_modules/
+skills/
+prompts/
+themes/
+scripts/
+tests/
+tsconfig.json

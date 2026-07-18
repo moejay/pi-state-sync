@@ -1,0 +1,10 @@
+{
+  "providers": {
+    "my-proxy": {
+      "baseUrl": "https://proxy.example.com",
+      "api": "anthropic-messages",
+      "apiKey": "$MY_PROXY_API_KEY",
+      "models": []
+    }
+  }
+}
