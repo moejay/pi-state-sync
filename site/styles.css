@@ -68,6 +68,7 @@ code, pre { font-family: var(--mono); }
 .hero { min-height: 690px; display: grid; grid-template-columns: 1.03fr .97fr; gap: 72px; align-items: center; padding-block: 86px 80px; }
 .eyebrow { display: flex; align-items: center; gap: 10px; color: #b8c2d2; font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .eyebrow span { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 18px var(--cyan); }
+.eyebrow b { color: inherit; font: inherit; letter-spacing: inherit; }
 .hero h1 { margin: 22px 0 24px; max-width: 720px; font-size: clamp(58px, 6vw, 88px); line-height: .98; letter-spacing: -.065em; }
 .hero h1 em { font-style: normal; color: transparent; background: linear-gradient(100deg, var(--cyan), #8bb8ff 48%, var(--purple)); background-clip: text; -webkit-background-clip: text; }
 .hero-lead { max-width: 650px; margin: 0; color: var(--muted); font-size: 19px; line-height: 1.7; }

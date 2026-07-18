@@ -1,6 +1,24 @@
 const toast = document.querySelector('.toast');
 let toastTimer;
 
+async function refreshPublishedVersion() {
+  try {
+    const response = await fetch('https://registry.npmjs.org/%40moejay%2Fpi-state-sync/latest', {
+      cache: 'no-store',
+    });
+    if (!response.ok) return;
+    const metadata = await response.json();
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(metadata.version ?? '')) return;
+    document.querySelectorAll('[data-package-version]').forEach((element) => {
+      element.textContent = `v${metadata.version}`;
+    });
+  } catch {
+    // Keep the baked release version when npm is unavailable.
+  }
+}
+
+void refreshPublishedVersion();
+
 document.querySelectorAll('[data-copy]').forEach((button) => {
   button.addEventListener('click', async () => {
     const value = button.dataset.copy;
