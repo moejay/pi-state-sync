@@ -5,6 +5,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import {
 	ALLOWED_PATHS,
 	COMMANDS,
+	buildStateReadme,
 	githubSlugFromTarget,
 	inspectPortableJson,
 	isForbiddenTrackedPath,
@@ -53,11 +54,61 @@ export default function piStateExtension(pi: ExtensionAPI) {
 		return result;
 	}
 
-	async function configureRepository(remoteArgument: string, ctx: ExtensionCommandContext): Promise<void> {
+	type ConfigureMode = "new" | "existing" | "local" | "reset" | "auto";
+
+	async function configureRepository(argument: string, ctx: ExtensionCommandContext): Promise<void> {
 		const probe = await git(["rev-parse", "--show-toplevel"], true);
 		const currentRoot = probe.code === 0 ? resolve(probe.stdout.trim()) : undefined;
-		let initialized = false;
+		const currentOriginResult = currentRoot === ROOT
+			? await git(["remote", "get-url", "origin"], true)
+			: undefined;
+		const currentOrigin = currentOriginResult?.code === 0 ? currentOriginResult.stdout.trim() : undefined;
 
+		const words = argument.trim().split(/\s+/).filter(Boolean);
+		const requestedMode = words[0] as ConfigureMode | undefined;
+		let mode: ConfigureMode = ["new", "existing", "local", "reset"].includes(requestedMode ?? "")
+			? requestedMode as ConfigureMode
+			: argument.trim() ? "auto" : "local";
+		let target = mode === "auto" ? argument.trim() : words.slice(1).join(" ");
+
+		if (!argument.trim() && ctx.hasUI) {
+			const choices = [
+				"Create a new private GitHub repository",
+				"Connect an existing repository",
+				"Use a local repository only",
+			];
+			if (currentOrigin) choices.push("Reset remote configuration");
+			const choice = await ctx.ui.select("How should Pi state be configured?", choices);
+			if (!choice) {
+				ctx.ui.notify("Pi state configuration cancelled", "info");
+				return;
+			}
+			mode = choice.startsWith("Create")
+				? "new"
+				: choice.startsWith("Connect")
+					? "existing"
+					: choice.startsWith("Reset") ? "reset" : "local";
+		}
+
+		if (mode === "reset") {
+			if (currentRoot !== ROOT || !currentOrigin) {
+				ctx.ui.notify("No Pi state origin is configured", "info");
+				return;
+			}
+			const approved = !ctx.hasUI || await ctx.ui.confirm(
+				"Reset Pi state configuration?",
+				`Remove origin ${currentOrigin}?\n\nLocal files, commits, and safety ignores will be kept.`,
+			);
+			if (!approved) {
+				ctx.ui.notify("Pi state reset cancelled", "info");
+				return;
+			}
+			await git(["remote", "remove", "origin"]);
+			ctx.ui.notify("Removed Pi state origin. Local files and Git history were kept.", "info");
+			return;
+		}
+
+		let initialized = false;
 		if (currentRoot !== ROOT) {
 			const detail = currentRoot
 				? `Pi state is inside another Git repository:\n${currentRoot}\n\nCreate a dedicated repository at:\n${ROOT}`
@@ -74,69 +125,117 @@ export default function piStateExtension(pi: ExtensionAPI) {
 		const gitignorePath = join(ROOT, ".gitignore");
 		const existingIgnore = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
 		const mergedIgnore = mergeGitignore(existingIgnore);
-		if (mergedIgnore.added.length > 0) {
-			writeFileSync(gitignorePath, mergedIgnore.content, "utf8");
-		}
+		if (mergedIgnore.added.length > 0) writeFileSync(gitignorePath, mergedIgnore.content, "utf8");
 
-		let target = remoteArgument.trim();
-		const auth = await gh(["auth", "status", "--hostname", "github.com"], true);
-		if (!target && auth.code === 0 && ctx.hasUI) {
+		const auth = mode === "local"
+			? undefined
+			: await gh(["auth", "status", "--hostname", "github.com"], true);
+		let githubUser: string | undefined;
+		if (auth?.code === 0) {
 			const user = await gh(["api", "user", "--jq", ".login"]);
-			target = (await ctx.ui.input("Private GitHub state repository", `${user.stdout.trim()}/pi-state`))?.trim() ?? "";
+			githubUser = user.stdout.trim();
 		}
 
-		let remoteStatus = "not configured";
-		if (target) {
+		if (!target && (mode === "new" || mode === "existing") && ctx.hasUI) {
+			target = (await ctx.ui.input(
+				mode === "new" ? "New private GitHub repository" : "Existing repository or Git remote",
+				githubUser ? `${githubUser}/pi-state` : "git@host:owner/pi-state.git",
+			))?.trim() ?? "";
+			if (!target) {
+				ctx.ui.notify("Pi state configuration cancelled", "info");
+				return;
+			}
+		}
+
+		let remoteUrl: string | undefined;
+		if (mode !== "local" && target) {
 			if (!isSafeRemoteUrl(target)) throw new Error("Invalid Git remote or GitHub owner/repository name");
 			const slug = githubSlugFromTarget(target);
-			let remoteUrl = target;
 
-			if (slug) {
-				if (auth.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
+			if (mode === "new") {
+				if (!slug) throw new Error("New repository must use a GitHub owner/repository name");
+				if (auth?.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
 				const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
-				if (lookup.code === 0 && lookup.stdout.trim()) {
-					remoteUrl = lookup.stdout.trim();
-				} else {
+				if (lookup.code === 0) throw new Error(`${slug} already exists. Choose 'Connect an existing repository'.`);
+				const create = !ctx.hasUI || await ctx.ui.confirm(
+					"Create private GitHub repository?",
+					`Create ${slug} as a private repository?`,
+				);
+				if (!create) {
+					ctx.ui.notify("GitHub repository creation cancelled", "info");
+					return;
+				}
+				await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
+				const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
+				remoteUrl = created.stdout.trim();
+			} else if (slug) {
+				if (auth?.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
+				const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
+				if (lookup.code !== 0 || !lookup.stdout.trim()) {
+					if (mode === "existing") throw new Error(`${slug} does not exist. Choose 'Create a new private GitHub repository'.`);
 					const create = ctx.hasUI && await ctx.ui.confirm(
-						"Create private GitHub repository?",
-						`${slug} does not exist. Create it as a private repository?`,
+						"Repository not found",
+						`${slug} does not exist. Create it as a new private repository?`,
 					);
-					if (!create) {
-						ctx.ui.notify(`Local repository configured; GitHub repository ${slug} was not created`, "info");
-						return;
-					}
+					if (!create) return;
 					await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
 					const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
 					remoteUrl = created.stdout.trim();
-				}
-			}
-
-			const currentOrigin = await git(["remote", "get-url", "origin"], true);
-			if (currentOrigin.code === 0) {
-				if (currentOrigin.stdout.trim() !== remoteUrl) {
-					const replace = !ctx.hasUI || await ctx.ui.confirm(
-						"Replace Git remote?",
-						`Current origin:\n${currentOrigin.stdout.trim()}\n\nNew origin:\n${remoteUrl}`,
-					);
-					if (!replace) {
-						ctx.ui.notify("Kept existing Git origin", "info");
-						return;
-					}
-					await git(["remote", "set-url", "origin", remoteUrl]);
+				} else {
+					remoteUrl = lookup.stdout.trim();
 				}
 			} else {
+				remoteUrl = target;
+			}
+		}
+
+		if (mode === "local" && currentOrigin) {
+			const remove = ctx.hasUI && await ctx.ui.confirm(
+				"Use local repository only?",
+				`Remove existing origin ${currentOrigin}? Local history will be kept.`,
+			);
+			if (remove) await git(["remote", "remove", "origin"]);
+		}
+
+		if (remoteUrl) {
+			const origin = await git(["remote", "get-url", "origin"], true);
+			if (origin.code === 0 && origin.stdout.trim() !== remoteUrl) {
+				const replace = !ctx.hasUI || await ctx.ui.confirm(
+					"Replace Git remote?",
+					`Current origin:\n${origin.stdout.trim()}\n\nNew origin:\n${remoteUrl}`,
+				);
+				if (!replace) {
+					ctx.ui.notify("Kept existing Git origin", "info");
+					return;
+				}
+				await git(["remote", "set-url", "origin", remoteUrl]);
+			} else if (origin.code !== 0) {
 				await git(["remote", "add", "origin", remoteUrl]);
 			}
-			remoteStatus = remoteUrl;
+		}
+
+		const finalOrigin = await git(["remote", "get-url", "origin"], true);
+		const remoteStatus = finalOrigin.code === 0 ? finalOrigin.stdout.trim() : "not configured";
+		const readmePath = join(ROOT, "README.md");
+		let createdReadme = false;
+		if (!existsSync(readmePath)) {
+			const remoteHead = remoteStatus === "not configured"
+				? undefined
+				: await git(["ls-remote", "--exit-code", "origin", "HEAD"], true);
+			if (!remoteHead || remoteHead.code === 2) {
+				writeFileSync(readmePath, buildStateReadme(remoteStatus === "not configured" ? undefined : remoteStatus), "utf8");
+				createdReadme = true;
+			}
 		}
 
 		ctx.ui.notify(
 			[
 				initialized ? `Initialized Git repository: ${ROOT}` : `Git repository ready: ${ROOT}`,
 				mergedIgnore.added.length > 0 ? `Protected ${mergedIgnore.added.length} local paths` : "Local paths already protected",
+				createdReadme ? "Created README.md with new-host setup instructions" : "README.md preserved or available from origin",
 				`Origin: ${remoteStatus}`,
 				"Next: /pistate snapshot chore: initialize Pi state",
-				remoteStatus !== "not configured" ? "Then: /pistate push" : "Optional: /pistate configure owner/private-repo",
+				remoteStatus !== "not configured" ? "Then: /pistate push" : "Optional: /pistate configure existing <remote>",
 			].join("\n"),
 			"info",
 		);
@@ -187,6 +286,14 @@ export default function piStateExtension(pi: ExtensionAPI) {
 	pi.registerCommand("pistate", {
 		description: "Manage Git-backed Pi state: configure, status, snapshot, pull, push",
 		getArgumentCompletions: (prefix) => {
+			if (prefix.startsWith("configure ")) {
+				const modePrefix = prefix.slice("configure ".length);
+				if (/\s/.test(modePrefix)) return null;
+				const modes = ["new", "existing", "local", "reset"].filter((mode) => mode.startsWith(modePrefix));
+				return modes.length > 0
+					? modes.map((mode) => ({ value: `configure ${mode}`, label: mode }))
+					: null;
+			}
 			if (/\s/.test(prefix)) return null;
 			const matches = COMMANDS.filter((command) => command.startsWith(prefix));
 			return matches.length > 0 ? matches.map((command) => ({ value: command, label: command })) : null;
@@ -264,7 +371,7 @@ export default function piStateExtension(pi: ExtensionAPI) {
 
 					default:
 						ctx.ui.notify(
-							"/pistate configure [remote|owner/repo] | status | snapshot [message] | pull | push",
+							"/pistate configure [new|existing|local|reset] [target] | status | snapshot [message] | pull | push",
 							"info",
 						);
 				}

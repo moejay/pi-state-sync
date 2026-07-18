@@ -14,7 +14,8 @@ The selected path must be the root of its own Git repository. This prevents a mi
 
 ## Command boundaries
 
-- `configure` initializes a dedicated local repository, merges safe ignore entries, and optionally creates/configures a private GitHub remote after confirmation.
+- `configure` asks whether to create a new private GitHub repository, connect an existing repository, or stay local. It initializes dedicated local Git, merges safe ignores, and generates a new-host README for empty repositories.
+- `configure reset` removes only `origin`; local files, history, and safety ignores remain.
 - `status` is read-only.
 - `snapshot` validates, stages only allowlisted paths, and commits locally.
 - `pull` requires a clean tree and accepts fast-forward updates only.

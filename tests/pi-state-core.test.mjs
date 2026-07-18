@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildStateReadme,
 	findUnsafeSecretLiterals,
 	githubSlugFromTarget,
 	isForbiddenTrackedPath,
@@ -25,6 +26,9 @@ test("configure helpers merge ignores and recognize GitHub repositories", () => 
 	assert.equal(githubSlugFromTarget("git@github.com:moejay/pi-state.git"), "moejay/pi-state");
 	assert.equal(githubSlugFromTarget("https://github.com/moejay/pi-state"), "moejay/pi-state");
 	assert.equal(githubSlugFromTarget("git@example.com:moejay/pi-state.git"), undefined);
+	const readme = buildStateReadme("git@github.com:moejay/pi-state.git");
+	assert.match(readme, /Set up a new host/);
+	assert.match(readme, /git clone git@github\.com:moejay\/pi-state\.git/);
 });
 
 test("runtime and credential paths are forbidden", () => {

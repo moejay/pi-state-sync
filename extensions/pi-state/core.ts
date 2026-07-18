@@ -19,6 +19,7 @@ export const GITIGNORE_ENTRIES = [
 export const ALLOWED_PATHS = [
 	".env",
 	".gitignore",
+	"README.md",
 	"settings.json",
 	"models.json",
 	"keybindings.json",
@@ -66,6 +67,69 @@ export function parseCommand(input: string): ParsedCommand {
 		action: trimmed.slice(0, separator),
 		rest: trimmed.slice(separator).trim(),
 	};
+}
+
+export function buildStateReadme(remote?: string): string {
+	const cloneSource = remote ?? "git@github.com:YOUR_USER/YOUR_PI_STATE.git";
+	return `# Pi state
+
+Private, Git-backed configuration shared across Pi installations.
+
+Managed with [@moejay/pi-state-sync](https://github.com/moejay/pi-state-sync).
+
+## What belongs here
+
+- Pi settings and model definitions
+- Extensions, skills, prompts, and themes
+- Context and system prompt files
+- Encrypted \`.env\` values
+
+Host-local credentials, dotenvx private keys, trust decisions, sessions, package caches, and generated files are intentionally ignored.
+
+## Set up a new host
+
+Install Pi, then clone this repository as its agent directory:
+
+\`\`\`bash
+mv ~/.pi/agent ~/.pi/agent.backup 2>/dev/null || true
+git clone ${cloneSource} ~/.pi/agent
+pi
+\`\`\`
+
+If Pi does not restore the package automatically:
+
+\`\`\`bash
+pi install npm:@moejay/pi-state-sync
+\`\`\`
+
+Authenticate providers separately on every host:
+
+\`\`\`text
+/login
+\`\`\`
+
+Transfer \`.env.keys\` through a secure channel or provide \`DOTENV_PRIVATE_KEY\` from a password manager. Never commit either private key.
+
+## Daily workflow
+
+Before work on another host:
+
+\`\`\`text
+/pistate pull
+\`\`\`
+
+After changing Pi configuration:
+
+\`\`\`text
+/pistate status
+/pistate snapshot chore: update Pi state
+/pistate push
+\`\`\`
+
+## Safety
+
+Review staged changes before the first push. This repository must remain private because configuration and instructions can still contain sensitive operational details.
+`;
 }
 
 export function mergeGitignore(content: string): { content: string; added: string[] } {

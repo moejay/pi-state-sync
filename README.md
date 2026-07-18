@@ -12,7 +12,9 @@ Git-backed configuration sync for [Pi](https://pi.dev), with dotenvx validation 
 
 ## Features
 
-- Configure a dedicated local Git repository and optionally create a private GitHub remote.
+- Choose explicitly between creating a new private GitHub repository, connecting an existing repository, or staying local.
+- Configure a dedicated local Git repository and safely reset its remote without deleting local history.
+- Generate a state-repository README with new-host clone and daily sync instructions.
 - Sync Pi settings, model definitions, context files, extensions, skills, prompts, and themes.
 - Commit only an explicit allowlist—never `git add -A` across the whole Pi directory.
 - Reject tracked credentials, sessions, package caches, and runtime state.
@@ -51,15 +53,24 @@ The interactive setup:
 
 1. initializes a dedicated Git repository when needed;
 2. merges safe host-local paths into `.gitignore`;
-3. asks for a GitHub `owner/repository`;
-4. offers to create it as a private repository when it does not exist;
-5. configures `origin`.
+3. asks whether to create a new private GitHub repository, connect an existing repository, or stay local;
+4. verifies that an existing GitHub repository exists, or confirms creation of a new private one;
+5. configures `origin`;
+6. generates `README.md` with setup instructions for new hosts when the remote is empty.
 
 You can provide the target directly:
 
 ```text
-/pistate configure YOUR_USER/YOUR_PRIVATE_PI_STATE
-/pistate configure git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git
+/pistate configure new YOUR_USER/YOUR_PRIVATE_PI_STATE
+/pistate configure existing YOUR_USER/YOUR_PRIVATE_PI_STATE
+/pistate configure existing git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git
+/pistate configure local
+```
+
+Reset only the configured remote while preserving files, commits, and safety ignores:
+
+```text
+/pistate configure reset
 ```
 
 Then snapshot and push:
@@ -86,7 +97,10 @@ If you use a custom config location, set `PI_CODING_AGENT_DIR` before starting P
 
 | Command | Action |
 |---|---|
-| `/pistate configure [remote\|owner/repo]` | Initialize state Git, protect local files, and optionally create/configure a private GitHub repository. |
+| `/pistate configure` | Choose new, existing, or local repository setup interactively. |
+| `/pistate configure new [owner/repo]` | Create and connect a new private GitHub repository. |
+| `/pistate configure existing [remote]` | Verify and connect an existing repository. |
+| `/pistate configure reset` | Remove only `origin`; preserve local files, commits, and safety ignores. |
 | `/pistate status` | Show Git changes without modifying anything. |
 | `/pistate snapshot [message]` | Validate, stage allowlisted state, and create a local commit. |
 | `/pistate pull` | Require a clean tree, fast-forward pull, validate, then reload Pi. |
@@ -111,7 +125,7 @@ Other host:
 
 Snapshot allowlist:
 
-- `.env` and `.gitignore`
+- `.env`, `.gitignore`, and the generated state `README.md`
 - `settings.json`, `models.json`, and `keybindings.json`
 - `AGENTS.md`, `SYSTEM.md`, and `APPEND_SYSTEM.md`
 - `extensions/`, `skills/`, `prompts/`, and `themes/`
