@@ -35,7 +35,8 @@ Never commit:
 
 ## Recommended practices
 
-- Use a private repository for Pi state.
+- Use a private repository for Pi state; `/pistate configure` creates GitHub repositories as private by default.
+- Review the owner/repository shown before confirming remote creation or replacement.
 - Protect GitHub and npm accounts with hardware-backed MFA.
 - Use SSH keys or a credential manager for Git; do not place Git tokens in state files.
 - Store dotenvx private keys in a password manager when syncing many hosts.

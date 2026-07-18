@@ -6,7 +6,7 @@ The Pi package gallery discovers public npm packages carrying the `pi-package` k
 
 - Create `https://github.com/moejay/pi-state-sync`.
 - Confirm `@moejay/pi-state-sync` remains available on npm.
-- Configure npm publishing through either an `NPM_TOKEN` GitHub secret or npm trusted publishing.
+- Configure npm trusted publishing for GitHub repository `moejay/pi-state-sync` and workflow `publish.yml`.
 - Verify repository visibility and README links.
 
 ## Release checklist
@@ -23,7 +23,7 @@ The Pi package gallery discovers public npm packages carrying the `pi-package` k
 2. Inspect the tarball list. It must not contain personal Pi settings, `.env`, `.env.keys`, `auth.json`, sessions, unrelated extensions, or skills.
 3. Update `CHANGELOG.md` and package version.
 4. Commit and push the release.
-5. Create and push a tag matching the package version, for example `v0.1.1`.
+5. Create and push a tag matching the package version, for example `v0.2.0`.
 6. The tag-triggered publish workflow verifies the version and runs `npm publish --access public --provenance`.
 7. Optionally create a GitHub release from the published tag.
 8. Verify:

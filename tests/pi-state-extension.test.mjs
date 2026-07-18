@@ -9,6 +9,113 @@ function git(root, ...args) {
 	return execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
 }
 
+test("configure initializes a repository, protects local state, and adds origin", async () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-state-configure-"));
+	try {
+		process.env.PI_STATE_DIR = root;
+		const { default: register } = await import(`../extensions/pi-state/index.ts?configure=${Date.now()}`);
+
+		let command;
+		const notifications = [];
+		const pi = {
+			async exec(executable, args, options = {}) {
+				if (executable === "gh") return { stdout: "", stderr: "gh unavailable", code: 1, killed: false };
+				const result = spawnSync(executable, args, {
+					cwd: options.cwd,
+					encoding: "utf8",
+					timeout: options.timeout,
+				});
+				return {
+					stdout: result.stdout ?? "",
+					stderr: result.stderr ?? "",
+					code: result.status ?? (result.error ? 1 : 0),
+					killed: Boolean(result.signal),
+				};
+			},
+			registerCommand(name, definition) {
+				if (name === "pistate") command = definition;
+			},
+		};
+
+		register(pi);
+		await command.handler("configure git@example.com:owner/pi-state.git", {
+			hasUI: false,
+			ui: { notify: (message, level) => notifications.push({ message, level }) },
+		});
+
+		assert.equal(git(root, "rev-parse", "--show-toplevel"), root);
+		assert.equal(git(root, "remote", "get-url", "origin"), "git@example.com:owner/pi-state.git");
+		const ignore = await import("node:fs").then(({ readFileSync }) => readFileSync(join(root, ".gitignore"), "utf8"));
+		assert.match(ignore, /auth\.json/);
+		assert.match(ignore, /sessions\//);
+		assert.equal(notifications.at(-1)?.level, "info");
+	} finally {
+		delete process.env.PI_STATE_DIR;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("configure offers to create a missing private GitHub repository", async () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-state-github-"));
+	try {
+		process.env.PI_STATE_DIR = root;
+		const { default: register } = await import(`../extensions/pi-state/index.ts?github=${Date.now()}`);
+
+		let command;
+		let created = false;
+		const confirmations = [];
+		const pi = {
+			async exec(executable, args, options = {}) {
+				if (executable === "gh") {
+					if (args[0] === "auth") return { stdout: "", stderr: "", code: 0, killed: false };
+					if (args[0] === "api") return { stdout: "moejay\n", stderr: "", code: 0, killed: false };
+					if (args[0] === "repo" && args[1] === "create") {
+						assert.ok(args.includes("--private"));
+						created = true;
+						return { stdout: "", stderr: "", code: 0, killed: false };
+					}
+					if (args[0] === "repo" && args[1] === "view") {
+						return created
+							? { stdout: "git@github.com:moejay/pi-state-test.git\n", stderr: "", code: 0, killed: false }
+							: { stdout: "", stderr: "not found", code: 1, killed: false };
+					}
+				}
+				const result = spawnSync(executable, args, {
+					cwd: options.cwd,
+					encoding: "utf8",
+					timeout: options.timeout,
+				});
+				return {
+					stdout: result.stdout ?? "",
+					stderr: result.stderr ?? "",
+					code: result.status ?? (result.error ? 1 : 0),
+					killed: Boolean(result.signal),
+				};
+			},
+			registerCommand(name, definition) {
+				if (name === "pistate") command = definition;
+			},
+		};
+
+		register(pi);
+		await command.handler("configure", {
+			hasUI: true,
+			ui: {
+				confirm: async (title) => { confirmations.push(title); return true; },
+				input: async () => "moejay/pi-state-test",
+				notify: () => undefined,
+			},
+		});
+
+		assert.equal(created, true);
+		assert.ok(confirmations.includes("Create private GitHub repository?"));
+		assert.equal(git(root, "remote", "get-url", "origin"), "git@github.com:moejay/pi-state-test.git");
+	} finally {
+		delete process.env.PI_STATE_DIR;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("snapshot commits allowlisted state and leaves credentials untracked", async () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-state-sync-"));
 	try {

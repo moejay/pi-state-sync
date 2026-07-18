@@ -1,12 +1,15 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
 	ALLOWED_PATHS,
 	COMMANDS,
+	githubSlugFromTarget,
 	inspectPortableJson,
 	isForbiddenTrackedPath,
+	isSafeRemoteUrl,
+	mergeGitignore,
 	parseCommand,
 	resolveStateRoot,
 } from "./core.ts";
@@ -40,6 +43,103 @@ export default function piStateExtension(pi: ExtensionAPI) {
 		if (resolve(result.stdout.trim()) !== ROOT) {
 			throw new Error(`PI state root is not its own Git repository: ${ROOT}`);
 		}
+	}
+
+	async function gh(args: string[], allowFailure = false): Promise<ExecResult> {
+		const result = await pi.exec("gh", args, { timeout: GIT_TIMEOUT_MS });
+		if (!allowFailure && result.code !== 0) {
+			throw new Error(result.stderr.trim() || result.stdout.trim() || `gh ${args[0]} failed`);
+		}
+		return result;
+	}
+
+	async function configureRepository(remoteArgument: string, ctx: ExtensionCommandContext): Promise<void> {
+		const probe = await git(["rev-parse", "--show-toplevel"], true);
+		const currentRoot = probe.code === 0 ? resolve(probe.stdout.trim()) : undefined;
+		let initialized = false;
+
+		if (currentRoot !== ROOT) {
+			const detail = currentRoot
+				? `Pi state is inside another Git repository:\n${currentRoot}\n\nCreate a dedicated repository at:\n${ROOT}`
+				: `Create a Git repository for Pi state at:\n${ROOT}`;
+			const approved = !ctx.hasUI || await ctx.ui.confirm("Configure Pi state", detail);
+			if (!approved) {
+				ctx.ui.notify("Pi state configuration cancelled", "info");
+				return;
+			}
+			await git(["init", "-b", "main", "."]);
+			initialized = true;
+		}
+
+		const gitignorePath = join(ROOT, ".gitignore");
+		const existingIgnore = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
+		const mergedIgnore = mergeGitignore(existingIgnore);
+		if (mergedIgnore.added.length > 0) {
+			writeFileSync(gitignorePath, mergedIgnore.content, "utf8");
+		}
+
+		let target = remoteArgument.trim();
+		const auth = await gh(["auth", "status", "--hostname", "github.com"], true);
+		if (!target && auth.code === 0 && ctx.hasUI) {
+			const user = await gh(["api", "user", "--jq", ".login"]);
+			target = (await ctx.ui.input("Private GitHub state repository", `${user.stdout.trim()}/pi-state`))?.trim() ?? "";
+		}
+
+		let remoteStatus = "not configured";
+		if (target) {
+			if (!isSafeRemoteUrl(target)) throw new Error("Invalid Git remote or GitHub owner/repository name");
+			const slug = githubSlugFromTarget(target);
+			let remoteUrl = target;
+
+			if (slug) {
+				if (auth.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
+				const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
+				if (lookup.code === 0 && lookup.stdout.trim()) {
+					remoteUrl = lookup.stdout.trim();
+				} else {
+					const create = ctx.hasUI && await ctx.ui.confirm(
+						"Create private GitHub repository?",
+						`${slug} does not exist. Create it as a private repository?`,
+					);
+					if (!create) {
+						ctx.ui.notify(`Local repository configured; GitHub repository ${slug} was not created`, "info");
+						return;
+					}
+					await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
+					const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
+					remoteUrl = created.stdout.trim();
+				}
+			}
+
+			const currentOrigin = await git(["remote", "get-url", "origin"], true);
+			if (currentOrigin.code === 0) {
+				if (currentOrigin.stdout.trim() !== remoteUrl) {
+					const replace = !ctx.hasUI || await ctx.ui.confirm(
+						"Replace Git remote?",
+						`Current origin:\n${currentOrigin.stdout.trim()}\n\nNew origin:\n${remoteUrl}`,
+					);
+					if (!replace) {
+						ctx.ui.notify("Kept existing Git origin", "info");
+						return;
+					}
+					await git(["remote", "set-url", "origin", remoteUrl]);
+				}
+			} else {
+				await git(["remote", "add", "origin", remoteUrl]);
+			}
+			remoteStatus = remoteUrl;
+		}
+
+		ctx.ui.notify(
+			[
+				initialized ? `Initialized Git repository: ${ROOT}` : `Git repository ready: ${ROOT}`,
+				mergedIgnore.added.length > 0 ? `Protected ${mergedIgnore.added.length} local paths` : "Local paths already protected",
+				`Origin: ${remoteStatus}`,
+				"Next: /pistate snapshot chore: initialize Pi state",
+				remoteStatus !== "not configured" ? "Then: /pistate push" : "Optional: /pistate configure owner/private-repo",
+			].join("\n"),
+			"info",
+		);
 	}
 
 	async function assertNoTrackedRuntimeState(): Promise<void> {
@@ -85,7 +185,7 @@ export default function piStateExtension(pi: ExtensionAPI) {
 	}
 
 	pi.registerCommand("pistate", {
-		description: "Manage Git-backed Pi state: status, snapshot, pull, push",
+		description: "Manage Git-backed Pi state: configure, status, snapshot, pull, push",
 		getArgumentCompletions: (prefix) => {
 			if (/\s/.test(prefix)) return null;
 			const matches = COMMANDS.filter((command) => command.startsWith(prefix));
@@ -95,6 +195,11 @@ export default function piStateExtension(pi: ExtensionAPI) {
 			const { action, rest } = parseCommand(args);
 
 			try {
+				if (action === "configure") {
+					await configureRepository(rest, ctx);
+					return;
+				}
+
 				await assertRepositoryRoot();
 
 				switch (action) {
@@ -159,7 +264,7 @@ export default function piStateExtension(pi: ExtensionAPI) {
 
 					default:
 						ctx.ui.notify(
-							"/pistate status | snapshot [message] | pull | push",
+							"/pistate configure [remote|owner/repo] | status | snapshot [message] | pull | push",
 							"info",
 						);
 				}

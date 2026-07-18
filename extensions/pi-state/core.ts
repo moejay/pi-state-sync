@@ -2,7 +2,19 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-export const COMMANDS = ["status", "snapshot", "pull", "push"] as const;
+export const COMMANDS = ["configure", "status", "snapshot", "pull", "push"] as const;
+
+export const GITIGNORE_ENTRIES = [
+	".env.keys",
+	"auth.json",
+	"trust.json",
+	"models-store.json",
+	"sessions/",
+	"npm/",
+	"git/",
+	"bin/",
+	"node_modules/",
+] as const;
 
 export const ALLOWED_PATHS = [
 	".env",
@@ -54,6 +66,46 @@ export function parseCommand(input: string): ParsedCommand {
 		action: trimmed.slice(0, separator),
 		rest: trimmed.slice(separator).trim(),
 	};
+}
+
+export function mergeGitignore(content: string): { content: string; added: string[] } {
+	const existing = new Set(
+		content
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean),
+	);
+	const added = GITIGNORE_ENTRIES.filter((entry) => !existing.has(entry));
+	if (added.length === 0) return { content, added: [] };
+
+	let merged = content;
+	if (merged && !merged.endsWith("\n")) merged += "\n";
+	if (merged.trim()) merged += "\n";
+	merged += `# pi-state-sync: host-local credentials and runtime data\n${added.join("\n")}\n`;
+	return { content: merged, added: [...added] };
+}
+
+export function isSafeRemoteUrl(input: string): boolean {
+	const remote = input.trim();
+	return remote.length > 0 && !remote.startsWith("-") && !/[\s\0\r\n]/.test(remote);
+}
+
+export function githubSlugFromTarget(input: string): string | undefined {
+	const target = input.trim().replace(/\.git$/, "");
+	const direct = target.match(/^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]+)$/);
+	if (direct) return direct[1];
+
+	const ssh = target.match(/^git@github\.com:([^/]+\/[^/]+)$/i);
+	if (ssh) return ssh[1];
+
+	try {
+		const url = new URL(target);
+		if (url.hostname.toLowerCase() !== "github.com") return undefined;
+		const path = url.pathname.replace(/^\/+|\/+$/g, "");
+		return /^[^/]+\/[^/]+$/.test(path) ? path : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 export function isForbiddenTrackedPath(input: string): boolean {

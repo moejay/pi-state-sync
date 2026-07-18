@@ -1,6 +1,6 @@
 {
   "name": "@moejay/pi-state-sync",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Git-backed Pi configuration sync with dotenvx-encrypted secrets",
   "license": "MIT",
   "author": "M0eJay <moe@moejay.dev>",

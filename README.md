@@ -8,10 +8,11 @@
 
 Git-backed configuration sync for [Pi](https://pi.dev), with dotenvx validation for encrypted secrets.
 
-`pi-state-sync` adds four explicit commands for reviewing, committing, pulling, and pushing portable Pi configuration. Sessions, OAuth credentials, trust decisions, caches, and package installations stay local.
+`pi-state-sync` adds five explicit commands for configuring, reviewing, committing, pulling, and pushing portable Pi configuration. Sessions, OAuth credentials, trust decisions, caches, and package installations stay local.
 
 ## Features
 
+- Configure a dedicated local Git repository and optionally create a private GitHub remote.
 - Sync Pi settings, model definitions, context files, extensions, skills, prompts, and themes.
 - Commit only an explicit allowlist—never `git add -A` across the whole Pi directory.
 - Reject tracked credentials, sessions, package caches, and runtime state.
@@ -40,21 +41,35 @@ Restart Pi or run `/reload` after installation.
 
 ## Quick start
 
-Pi stores global configuration in `~/.pi/agent` by default. Make that directory a private Git repository:
-
-```bash
-cd ~/.pi/agent
-git init -b main
-git remote add origin git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git
-```
-
-Add the recommended ignores from [`examples/.gitignore`](./examples/.gitignore), then in Pi:
+Pi stores global configuration in `~/.pi/agent` by default. With [GitHub CLI](https://cli.github.com/) authenticated, run:
 
 ```text
-/pistate status
+/pistate configure
+```
+
+The interactive setup:
+
+1. initializes a dedicated Git repository when needed;
+2. merges safe host-local paths into `.gitignore`;
+3. asks for a GitHub `owner/repository`;
+4. offers to create it as a private repository when it does not exist;
+5. configures `origin`.
+
+You can provide the target directly:
+
+```text
+/pistate configure YOUR_USER/YOUR_PRIVATE_PI_STATE
+/pistate configure git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git
+```
+
+Then snapshot and push:
+
+```text
 /pistate snapshot chore: initialize Pi state
 /pistate push
 ```
+
+Without GitHub CLI, `configure` still initializes the local repository and accepts any explicit Git remote URL.
 
 On another host, clone the private state repository where Pi expects its configuration:
 
@@ -71,6 +86,7 @@ If you use a custom config location, set `PI_CODING_AGENT_DIR` before starting P
 
 | Command | Action |
 |---|---|
+| `/pistate configure [remote\|owner/repo]` | Initialize state Git, protect local files, and optionally create/configure a private GitHub repository. |
 | `/pistate status` | Show Git changes without modifying anything. |
 | `/pistate snapshot [message]` | Validate, stage allowlisted state, and create a local commit. |
 | `/pistate pull` | Require a clean tree, fast-forward pull, validate, then reload Pi. |
@@ -204,6 +220,7 @@ npm pack --dry-run
 
 - Pi with extension and package support
 - Git
+- GitHub CLI for interactive private-repository creation (optional)
 - Node.js 20+
 - dotenvx for encrypted environment validation and launch-time injection
 

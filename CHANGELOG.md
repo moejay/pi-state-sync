@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Add `/pistate configure` to initialize the local state repository.
+- Merge safe ignore rules without replacing existing `.gitignore` content.
+- Offer to create a missing private GitHub repository through authenticated `gh`.
+- Configure or confirm the `origin` remote.
+
 ## 0.1.1
 
 - Publish under the `@moejay/pi-state-sync` npm scope.
