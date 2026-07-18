@@ -55,8 +55,11 @@ The interactive setup:
 2. merges safe host-local paths into `.gitignore`;
 3. asks whether to create a new private GitHub repository, connect an existing repository, or stay local;
 4. verifies that an existing GitHub repository exists, or confirms creation of a new private one;
-5. configures `origin`;
-6. generates `README.md` with setup instructions for new hosts when the remote is empty.
+5. clones existing state into the Pi agent directory instead of attaching it to dirty local files;
+6. preserves host-local auth, sessions, package caches, and generated data;
+7. backs up replaced portable configuration to a timestamped sibling directory;
+8. configures `origin`;
+9. generates `README.md` with setup instructions for new hosts when the remote is empty.
 
 You can provide the target directly:
 
@@ -82,14 +85,20 @@ Then snapshot and push:
 
 Without GitHub CLI, `configure` still initializes the local repository and accepts any explicit Git remote URL.
 
-On another host, clone the private state repository where Pi expects its configuration:
+On another host, install the extension and import the existing repository:
 
 ```bash
-git clone git@github.com:YOUR_USER/YOUR_PRIVATE_PI_STATE.git ~/.pi/agent
+pi install npm:@moejay/pi-state-sync
 pi
 ```
 
-The committed `settings.json` contains the `@moejay/pi-state-sync` package declaration, so Pi can restore the package. Authenticate separately on each host with `/login`.
+Then inside Pi:
+
+```text
+/pistate configure existing YOUR_USER/YOUR_PRIVATE_PI_STATE
+```
+
+The extension clones and validates remote state, preserves host-local auth/sessions/caches, backs up replaced portable files, and reloads Pi. The generated state `README.md` includes these instructions plus a manual clone fallback. Authenticate separately on each host with `/login`.
 
 If you use a custom config location, set `PI_CODING_AGENT_DIR` before starting Pi. `PI_STATE_DIR` can explicitly select the same Git-backed state root.
 
@@ -99,7 +108,7 @@ If you use a custom config location, set `PI_CODING_AGENT_DIR` before starting P
 |---|---|
 | `/pistate configure` | Choose new, existing, or local repository setup interactively. |
 | `/pistate configure new [owner/repo]` | Create and connect a new private GitHub repository. |
-| `/pistate configure existing [remote]` | Verify and connect an existing repository. |
+| `/pistate configure existing [remote]` | Validate and clone existing state, preserving host-local data and backing up replaced portable config. |
 | `/pistate configure reset` | Remove only `origin`; preserve local files, commits, and safety ignores. |
 | `/pistate status` | Show Git changes without modifying anything. |
 | `/pistate snapshot [message]` | Validate, stage allowlisted state, and create a local commit. |

@@ -38,6 +38,9 @@ Never commit:
 - Use a private repository for Pi state; `/pistate configure` creates GitHub repositories as private by default.
 - Review the owner/repository shown before confirming remote creation or replacement.
 - `configure reset` removes only `origin`; it never deletes local files, Git history, ignores, or the remote repository.
+- Existing repositories are cloned and validated in a temporary directory before portable state is replaced.
+- Existing imports reject tracked credential/runtime paths and unsupported paths.
+- Replaced portable configuration is moved to a timestamped sibling backup; host-local auth, sessions, and caches stay in place.
 - Generated state README files contain clone instructions and the remote URL, but no credentials.
 - Protect GitHub and npm accounts with hardware-backed MFA.
 - Use SSH keys or a credential manager for Git; do not place Git tokens in state files.

@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
 	ALLOWED_PATHS,
@@ -8,6 +8,7 @@ import {
 	buildStateReadme,
 	githubSlugFromTarget,
 	inspectPortableJson,
+	isAllowedStatePath,
 	isForbiddenTrackedPath,
 	isSafeRemoteUrl,
 	mergeGitignore,
@@ -31,12 +32,16 @@ function resolveDotenvxCli(): string | undefined {
 }
 
 export default function piStateExtension(pi: ExtensionAPI) {
-	async function git(args: string[], allowFailure = false): Promise<ExecResult> {
-		const result = await pi.exec("git", ["-C", ROOT, ...args], { timeout: GIT_TIMEOUT_MS });
+	async function gitAt(directory: string, args: string[], allowFailure = false): Promise<ExecResult> {
+		const result = await pi.exec("git", ["-C", directory, ...args], { timeout: GIT_TIMEOUT_MS });
 		if (!allowFailure && result.code !== 0) {
 			throw new Error(result.stderr.trim() || result.stdout.trim() || `git ${args[0]} failed`);
 		}
 		return result;
+	}
+
+	async function git(args: string[], allowFailure = false): Promise<ExecResult> {
+		return gitAt(ROOT, args, allowFailure);
 	}
 
 	async function assertRepositoryRoot(): Promise<void> {
@@ -52,6 +57,143 @@ export default function piStateExtension(pi: ExtensionAPI) {
 			throw new Error(result.stderr.trim() || result.stdout.trim() || `gh ${args[0]} failed`);
 		}
 		return result;
+	}
+
+	async function resolveExistingRemote(target: string, ctx: ExtensionCommandContext): Promise<string | undefined> {
+		let requested = target.trim();
+		const auth = await gh(["auth", "status", "--hostname", "github.com"], true);
+		let githubUser: string | undefined;
+		if (auth.code === 0) {
+			const user = await gh(["api", "user", "--jq", ".login"]);
+			githubUser = user.stdout.trim();
+		}
+		if (!requested && ctx.hasUI) {
+			requested = (await ctx.ui.input(
+				"Existing repository or Git remote",
+				githubUser ? `${githubUser}/pi-state` : "git@host:owner/pi-state.git",
+			))?.trim() ?? "";
+		}
+		if (!requested) return undefined;
+		if (!isSafeRemoteUrl(requested)) throw new Error("Invalid Git remote or GitHub owner/repository name");
+
+		const slug = githubSlugFromTarget(requested);
+		if (!slug) return requested;
+		if (auth.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
+		const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
+		if (lookup.code !== 0 || !lookup.stdout.trim()) {
+			throw new Error(`${slug} does not exist. Choose 'Create a new private GitHub repository'.`);
+		}
+		return lookup.stdout.trim();
+	}
+
+	async function importExistingRepository(target: string, ctx: ExtensionCommandContext): Promise<void> {
+		const remoteUrl = await resolveExistingRemote(target, ctx);
+		if (!remoteUrl) {
+			ctx.ui.notify("Pi state configuration cancelled", "info");
+			return;
+		}
+		const approved = !ctx.hasUI || await ctx.ui.confirm(
+			"Import existing Pi state?",
+			[
+				`Clone ${remoteUrl} into ${ROOT}?`,
+				"Portable Pi configuration will be replaced by the repository.",
+				"Host-local credentials, sessions, package caches, and generated data will be kept.",
+				"Replaced local configuration will be moved to a timestamped sibling backup.",
+			].join("\n\n"),
+		);
+		if (!approved) {
+			ctx.ui.notify("Existing repository import cancelled", "info");
+			return;
+		}
+
+		const parent = dirname(ROOT);
+		const temporaryRoot = mkdtempSync(join(parent, ".pi-state-sync-clone-"));
+		const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+		const backupRoot = join(parent, `${basename(ROOT)}-backup-${stamp}`);
+		const movedToBackup: string[] = [];
+		const installedPaths: string[] = [];
+		let applied = false;
+
+		try {
+			const clone = await pi.exec("git", ["clone", "--origin", "origin", "--", remoteUrl, temporaryRoot], {
+				timeout: GIT_TIMEOUT_MS,
+			});
+			if (clone.code !== 0) throw new Error(clone.stderr.trim() || clone.stdout.trim() || "Git clone failed");
+
+			const trackedResult = await gitAt(temporaryRoot, ["ls-files", "-z"]);
+			const tracked = trackedResult.stdout.split("\0").filter(Boolean);
+			const forbidden = tracked.filter(isForbiddenTrackedPath);
+			if (forbidden.length > 0) {
+				throw new Error(`Existing repository tracks private/runtime files: ${forbidden.join(", ")}`);
+			}
+			const unexpected = tracked.filter((path) => !isAllowedStatePath(path));
+			if (unexpected.length > 0) {
+				throw new Error(`Existing repository contains unsupported state paths: ${unexpected.join(", ")}`);
+			}
+			const configIssues = inspectPortableJson(temporaryRoot);
+			if (configIssues.length > 0) {
+				throw new Error(`Existing repository has unsafe or invalid config: ${configIssues.join(", ")}`);
+			}
+
+			mkdirSync(backupRoot, { recursive: true });
+			for (const path of [...ALLOWED_PATHS, ".git"]) {
+				const source = join(ROOT, path);
+				if (!existsSync(source)) continue;
+				const destination = join(backupRoot, path);
+				mkdirSync(dirname(destination), { recursive: true });
+				renameSync(source, destination);
+				movedToBackup.push(path);
+			}
+
+			renameSync(join(temporaryRoot, ".git"), join(ROOT, ".git"));
+			installedPaths.push(".git");
+			for (const path of ALLOWED_PATHS) {
+				const source = join(temporaryRoot, path);
+				if (!existsSync(source)) continue;
+				const destination = join(ROOT, path);
+				mkdirSync(dirname(destination), { recursive: true });
+				renameSync(source, destination);
+				installedPaths.push(path);
+			}
+
+			const gitignorePath = join(ROOT, ".gitignore");
+			const existingIgnore = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
+			const mergedIgnore = mergeGitignore(existingIgnore);
+			if (mergedIgnore.added.length > 0) writeFileSync(gitignorePath, mergedIgnore.content, "utf8");
+			const readmePath = join(ROOT, "README.md");
+			if (!existsSync(readmePath)) writeFileSync(readmePath, buildStateReadme(remoteUrl), "utf8");
+
+			const status = await git(["status", "--short"]);
+			applied = true;
+			ctx.ui.notify(
+				[
+					`Imported existing Pi state from ${remoteUrl}`,
+					movedToBackup.length > 0 ? `Previous portable state backup: ${backupRoot}` : "No previous portable state needed backup",
+					"Host-local credentials and runtime data were preserved",
+					status.stdout.trim()
+						? "Local safety/documentation changes remain; review /pistate status, then snapshot and push"
+						: "State repository is clean and ready for /pistate pull",
+					"Reloading Pi resources from the imported state",
+				].join("\n"),
+				"info",
+			);
+			await ctx.reload();
+		} catch (error) {
+			if (!applied) {
+				for (const path of installedPaths.reverse()) rmSync(join(ROOT, path), { recursive: true, force: true });
+				for (const path of movedToBackup.reverse()) {
+					const source = join(backupRoot, path);
+					if (!existsSync(source)) continue;
+					const destination = join(ROOT, path);
+					mkdirSync(dirname(destination), { recursive: true });
+					renameSync(source, destination);
+				}
+			}
+			throw error;
+		} finally {
+			rmSync(temporaryRoot, { recursive: true, force: true });
+			if (existsSync(backupRoot) && movedToBackup.length === 0) rmSync(backupRoot, { recursive: true, force: true });
+		}
 	}
 
 	type ConfigureMode = "new" | "existing" | "local" | "reset" | "auto";
@@ -108,6 +250,12 @@ export default function piStateExtension(pi: ExtensionAPI) {
 			return;
 		}
 
+		if (mode === "auto") mode = "existing";
+		if (mode === "existing") {
+			await importExistingRepository(target, ctx);
+			return;
+		}
+
 		let initialized = false;
 		if (currentRoot !== ROOT) {
 			const detail = currentRoot
@@ -136,10 +284,10 @@ export default function piStateExtension(pi: ExtensionAPI) {
 			githubUser = user.stdout.trim();
 		}
 
-		if (!target && (mode === "new" || mode === "existing") && ctx.hasUI) {
+		if (!target && mode === "new" && ctx.hasUI) {
 			target = (await ctx.ui.input(
-				mode === "new" ? "New private GitHub repository" : "Existing repository or Git remote",
-				githubUser ? `${githubUser}/pi-state` : "git@host:owner/pi-state.git",
+				"New private GitHub repository",
+				githubUser ? `${githubUser}/pi-state` : "owner/pi-state",
 			))?.trim() ?? "";
 			if (!target) {
 				ctx.ui.notify("Pi state configuration cancelled", "info");
@@ -148,45 +296,24 @@ export default function piStateExtension(pi: ExtensionAPI) {
 		}
 
 		let remoteUrl: string | undefined;
-		if (mode !== "local" && target) {
-			if (!isSafeRemoteUrl(target)) throw new Error("Invalid Git remote or GitHub owner/repository name");
+		if (mode === "new" && target) {
+			if (!isSafeRemoteUrl(target)) throw new Error("Invalid GitHub owner/repository name");
 			const slug = githubSlugFromTarget(target);
-
-			if (mode === "new") {
-				if (!slug) throw new Error("New repository must use a GitHub owner/repository name");
-				if (auth?.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
-				const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
-				if (lookup.code === 0) throw new Error(`${slug} already exists. Choose 'Connect an existing repository'.`);
-				const create = !ctx.hasUI || await ctx.ui.confirm(
-					"Create private GitHub repository?",
-					`Create ${slug} as a private repository?`,
-				);
-				if (!create) {
-					ctx.ui.notify("GitHub repository creation cancelled", "info");
-					return;
-				}
-				await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
-				const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
-				remoteUrl = created.stdout.trim();
-			} else if (slug) {
-				if (auth?.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
-				const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
-				if (lookup.code !== 0 || !lookup.stdout.trim()) {
-					if (mode === "existing") throw new Error(`${slug} does not exist. Choose 'Create a new private GitHub repository'.`);
-					const create = ctx.hasUI && await ctx.ui.confirm(
-						"Repository not found",
-						`${slug} does not exist. Create it as a new private repository?`,
-					);
-					if (!create) return;
-					await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
-					const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
-					remoteUrl = created.stdout.trim();
-				} else {
-					remoteUrl = lookup.stdout.trim();
-				}
-			} else {
-				remoteUrl = target;
+			if (!slug) throw new Error("New repository must use a GitHub owner/repository name");
+			if (auth?.code !== 0) throw new Error("GitHub CLI is not authenticated. Run: gh auth login");
+			const lookup = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"], true);
+			if (lookup.code === 0) throw new Error(`${slug} already exists. Choose 'Connect an existing repository'.`);
+			const create = !ctx.hasUI || await ctx.ui.confirm(
+				"Create private GitHub repository?",
+				`Create ${slug} as a private repository?`,
+			);
+			if (!create) {
+				ctx.ui.notify("GitHub repository creation cancelled", "info");
+				return;
 			}
+			await gh(["repo", "create", slug, "--private", "--description", "Private Pi configuration state"]);
+			const created = await gh(["repo", "view", slug, "--json", "sshUrl", "--jq", ".sshUrl"]);
+			remoteUrl = created.stdout.trim();
 		}
 
 		if (mode === "local" && currentOrigin) {

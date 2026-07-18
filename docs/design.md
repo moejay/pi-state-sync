@@ -14,7 +14,7 @@ The selected path must be the root of its own Git repository. This prevents a mi
 
 ## Command boundaries
 
-- `configure` asks whether to create a new private GitHub repository, connect an existing repository, or stay local. It initializes dedicated local Git, merges safe ignores, and generates a new-host README for empty repositories.
+- `configure` asks whether to create a new private GitHub repository, clone an existing repository, or stay local. Existing imports are validated in a temporary clone, portable local config is backed up and replaced, host-local runtime data is preserved, and Pi reloads from the imported state. New empty repositories receive safe ignores and a new-host README.
 - `configure reset` removes only `origin`; local files, history, and safety ignores remain.
 - `status` is read-only.
 - `snapshot` validates, stages only allowlisted paths, and commits locally.

@@ -1,17 +1,30 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 function git(root, ...args) {
 	return execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
 }
 
-test("configure initializes a repository, protects local state, and adds origin", async () => {
+test("configure clones an existing repository into Pi state", async () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-state-configure-"));
+	const remote = mkdtempSync(join(tmpdir(), "pi-state-remote-"));
 	try {
+		git(remote, "init", "-b", "main");
+		git(remote, "config", "user.name", "Pi State Test");
+		git(remote, "config", "user.email", "pi-state@example.invalid");
+		writeFileSync(join(remote, ".gitignore"), "auth.json\n.env.keys\ntrust.json\nmodels-store.json\nsessions/\nnpm/\ngit/\nbin/\nnode_modules/\n");
+		writeFileSync(join(remote, "README.md"), "# Existing Pi state\n\nSet up a new host.\n");
+		writeFileSync(join(remote, "settings.json"), "{}\n");
+		git(remote, "add", ".");
+		git(remote, "commit", "-m", "test: seed state");
+		writeFileSync(join(root, "settings.json"), "{\"local\":true}\n");
+		writeFileSync(join(root, "auth.json"), "{\"hostLocal\":true}\n");
+		mkdirSync(join(root, "sessions"), { recursive: true });
+		writeFileSync(join(root, "sessions", "local.jsonl"), "host-local session\n");
 		process.env.PI_STATE_DIR = root;
 		const { default: register } = await import(`../extensions/pi-state/index.ts?configure=${Date.now()}`);
 
@@ -20,9 +33,6 @@ test("configure initializes a repository, protects local state, and adds origin"
 		const pi = {
 			async exec(executable, args, options = {}) {
 				if (executable === "gh") return { stdout: "", stderr: "gh unavailable", code: 1, killed: false };
-				if (executable === "git" && args.includes("ls-remote")) {
-					return { stdout: "", stderr: "", code: 2, killed: false };
-				}
 				const result = spawnSync(executable, args, {
 					cwd: options.cwd,
 					encoding: "utf8",
@@ -41,23 +51,30 @@ test("configure initializes a repository, protects local state, and adds origin"
 		};
 
 		register(pi);
-		await command.handler("configure git@example.com:owner/pi-state.git", {
+		await command.handler(`configure existing ${remote}`, {
 			hasUI: false,
+			reload: async () => undefined,
 			ui: { notify: (message, level) => notifications.push({ message, level }) },
 		});
 
 		assert.equal(git(root, "rev-parse", "--show-toplevel"), root);
-		assert.equal(git(root, "remote", "get-url", "origin"), "git@example.com:owner/pi-state.git");
+		assert.equal(git(root, "remote", "get-url", "origin"), remote);
 		const ignore = readFileSync(join(root, ".gitignore"), "utf8");
 		assert.match(ignore, /auth\.json/);
 		assert.match(ignore, /sessions\//);
 		const readme = readFileSync(join(root, "README.md"), "utf8");
-		assert.match(readme, /Set up a new host/);
-		assert.match(readme, /git@example\.com:owner\/pi-state\.git/);
+		assert.match(readme, /Existing Pi state/);
+		assert.equal(readFileSync(join(root, "settings.json"), "utf8"), "{}\n");
+		assert.match(readFileSync(join(root, "auth.json"), "utf8"), /hostLocal/);
+		assert.match(readFileSync(join(root, "sessions", "local.jsonl"), "utf8"), /host-local/);
+		const backups = readdirSync(dirname(root)).filter((name) => name.startsWith(`${basename(root)}-backup-`));
+		assert.equal(backups.length, 1);
+		rmSync(join(dirname(root), backups[0]), { recursive: true, force: true });
 		assert.equal(notifications.at(-1)?.level, "info");
 	} finally {
 		delete process.env.PI_STATE_DIR;
 		rmSync(root, { recursive: true, force: true });
+		rmSync(remote, { recursive: true, force: true });
 	}
 });
 
@@ -129,7 +146,16 @@ test("configure offers to create a missing private GitHub repository", async () 
 
 test("configure connects an existing repository without offering creation", async () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-state-existing-"));
+	const remote = mkdtempSync(join(tmpdir(), "pi-state-existing-remote-"));
 	try {
+		git(remote, "init", "-b", "main");
+		git(remote, "config", "user.name", "Pi State Test");
+		git(remote, "config", "user.email", "pi-state@example.invalid");
+		writeFileSync(join(remote, ".gitignore"), "auth.json\n.env.keys\ntrust.json\nmodels-store.json\nsessions/\nnpm/\ngit/\nbin/\nnode_modules/\n");
+		writeFileSync(join(remote, "README.md"), "# Existing state\n");
+		writeFileSync(join(remote, "settings.json"), "{}\n");
+		git(remote, "add", ".");
+		git(remote, "commit", "-m", "test: seed existing state");
 		process.env.PI_STATE_DIR = root;
 		const { default: register } = await import(`../extensions/pi-state/index.ts?existing=${Date.now()}`);
 		let command;
@@ -141,7 +167,7 @@ test("configure connects an existing repository without offering creation", asyn
 					if (args[0] === "api") return { stdout: "moejay\n", stderr: "", code: 0, killed: false };
 					if (args[0] === "repo" && args[1] === "create") createCalled = true;
 					if (args[0] === "repo" && args[1] === "view") {
-						return { stdout: "git@github.com:moejay/existing-state.git\n", stderr: "", code: 0, killed: false };
+						return { stdout: `${remote}\n`, stderr: "", code: 0, killed: false };
 					}
 				}
 				if (executable === "git" && args.includes("ls-remote")) {
@@ -155,6 +181,7 @@ test("configure connects an existing repository without offering creation", asyn
 		register(pi);
 		await command.handler("configure", {
 			hasUI: true,
+			reload: async () => undefined,
 			ui: {
 				select: async (_title, choices) => choices[1],
 				confirm: async () => true,
@@ -163,10 +190,12 @@ test("configure connects an existing repository without offering creation", asyn
 			},
 		});
 		assert.equal(createCalled, false);
-		assert.equal(git(root, "remote", "get-url", "origin"), "git@github.com:moejay/existing-state.git");
+		assert.equal(git(root, "remote", "get-url", "origin"), remote);
+		assert.match(readFileSync(join(root, "README.md"), "utf8"), /Existing state/);
 	} finally {
 		delete process.env.PI_STATE_DIR;
 		rmSync(root, { recursive: true, force: true });
+		rmSync(remote, { recursive: true, force: true });
 	}
 });
 

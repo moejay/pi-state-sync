@@ -39,6 +39,7 @@ const FORBIDDEN_FILES = new Set([
 	"models-store.json",
 ]);
 
+const PORTABLE_DIRECTORIES = new Set(["extensions", "skills", "prompts", "themes"]);
 const FORBIDDEN_DIRECTORIES = ["sessions", "npm", "git", "bin", "node_modules"];
 const SECRET_KEY_PATTERN = /(?:api[-_]?key|token|secret|password|authorization)/i;
 const SAFE_LITERAL_SECRETS = new Set(["dummy", "local", "none", "ollama"]);
@@ -88,18 +89,27 @@ Host-local credentials, dotenvx private keys, trust decisions, sessions, package
 
 ## Set up a new host
 
-Install Pi, then clone this repository as its agent directory:
+Install the extension, start Pi, then import this existing repository:
+
+\`\`\`bash
+pi install npm:@moejay/pi-state-sync
+pi
+\`\`\`
+
+Inside Pi:
+
+\`\`\`text
+/pistate configure existing ${cloneSource}
+\`\`\`
+
+The import replaces portable Pi configuration from the repository while preserving host-local auth, sessions, package caches, and generated data. Replaced portable files are backed up beside the agent directory.
+
+Manual fallback:
 
 \`\`\`bash
 mv ~/.pi/agent ~/.pi/agent.backup 2>/dev/null || true
 git clone ${cloneSource} ~/.pi/agent
 pi
-\`\`\`
-
-If Pi does not restore the package automatically:
-
-\`\`\`bash
-pi install npm:@moejay/pi-state-sync
 \`\`\`
 
 Authenticate providers separately on every host:
@@ -170,6 +180,15 @@ export function githubSlugFromTarget(input: string): string | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+export function isAllowedStatePath(input: string): boolean {
+	const path = input.replaceAll("\\", "/").replace(/^\.\//, "");
+	for (const allowed of ALLOWED_PATHS) {
+		if (path === allowed) return true;
+		if (PORTABLE_DIRECTORIES.has(allowed) && path.startsWith(`${allowed}/`)) return true;
+	}
+	return false;
 }
 
 export function isForbiddenTrackedPath(input: string): boolean {

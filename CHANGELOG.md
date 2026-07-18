@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Fix existing-repository setup to clone and install remote state instead of attaching a dirty local repository.
+- Preserve host-local credentials, sessions, package caches, and generated data during import.
+- Back up replaced portable configuration to a timestamped sibling directory.
+- Validate imported repositories before applying them and reload Pi afterward.
+
 ## 0.3.0
 
 - Ask whether configuration should create a new repository, connect an existing repository, or remain local.
